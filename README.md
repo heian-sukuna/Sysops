@@ -172,4 +172,4 @@ directory to start completely fresh.
 
 ## License
 
-[MIT](LICENSE) © 2026 Ryan Wanyika
+[MIT](LICENSE) © 2026 heian-sukuna
