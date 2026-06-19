@@ -69,6 +69,8 @@ def tag(name):
         "TAILSCALE": (53,  15), "RSYNC":     (22,  15), "SSH":       (94,  15),
         "NGINX":     (28,  15), "CYBER":     (88,  15), "COMBO":     (55,  15),
         "GIT":       (136, 0),  "REDTEAM":   (196, 15), "NIGHTMARE": (196, 11),
+        "ARCHITECTURE":(25, 15),"IAC":       (60,  15), "TERRAFORM": (57,  15),
+        "DEFENSIVE": (29,  15), "AUTOMATION":(94,  15), "INFRA":     (24,  15),
     }
     bg_n, fg_n = TAG_MAP.get(name.upper(), (238, 15))
     return f"{bg256(bg_n)}{fg256(fg_n)}{B} {name.upper()} {R}"
@@ -153,6 +155,20 @@ THEMES = {
 
 _ACTIVE_THEME = "cyberpunk"
 _ACTIVE_FONT  = "block"
+_ACTIVE_SPEED = "cinematic"
+_SPEED        = 1.0    # multiplier applied to every animation delay
+
+# Animation-speed presets. _SPEED scales all sleeps; 0.0 == no waiting.
+SPEED_PRESETS = {
+    "cinematic": 1.0,
+    "fast":      0.4,
+    "instant":   0.0,
+}
+SPEED_LABELS = {
+    "cinematic": "full dramatic timing (default)",
+    "fast":      "snappy — about half the delay",
+    "instant":   "no waiting — results appear at once",
+}
 
 def set_theme(name):
     global _ACTIVE_THEME
@@ -161,8 +177,29 @@ def set_theme(name):
 
 def set_font(name):
     global _ACTIVE_FONT
+    name = _FONT_ALIASES.get(name, name)
     if name in BANNER_FONTS:
         _ACTIVE_FONT = name
+
+def set_speed(name):
+    global _ACTIVE_SPEED, _SPEED
+    if name in SPEED_PRESETS:
+        _ACTIVE_SPEED = name
+        _SPEED = SPEED_PRESETS[name]
+
+def get_speed():
+    return _ACTIVE_SPEED
+
+def pause(seconds):
+    """Sleep for `seconds`, scaled by the active animation speed.
+
+    All simulated-latency delays in the game route through here so a single
+    setting (cinematic / fast / instant) controls the whole feel. Instant
+    mode (_SPEED == 0) is a no-op, making the game fully responsive.
+    """
+    if _SPEED <= 0 or seconds <= 0:
+        return
+    time.sleep(seconds * _SPEED)
 
 def get_theme():
     return THEMES.get(_ACTIVE_THEME, THEMES["cyberpunk"])
@@ -191,29 +228,32 @@ BANNER_GHOST = [
     r"  ██████    ████   ███████  ██████  ██      ███████",
 ]
 
-BANNER_SHARP = [
-    r"  ____ _  _ ____ ____ ____  ____",
-    r"  [__  |  | [__  |  | |__]  [__ ",
-    r"  ___] |\/ ___] |__| |     ___]",
+BANNER_WAVE = [
+    r' ▄███▄  █▌  ▐█   ▄███▄   ▄██▄   ████▄    ▄███▄',
+    r'██▀▀▀   ▀█▄▟█▀  ██▀▀▀   ██  ██  ██  ██  ██▀▀▀',
+    r'▀███▄     ██    ▀███▄   ██  ██  ████▀   ▀███▄',
+    r'  ▀██▌    ██      ▀██▌  ██  ██  ██        ▀██▌',
+    r'▀███▀     ██    ▀███▀    ▀██▀   ██      ▀███▀',
 ]
 
-BANNER_CYBER = [
-    r"  ▄████████ ▄██   ▄      ▄████████  ▄██████▄     ▄███████▄    ▄████████",
-    r" ███    ███ ███   ██▄   ███    ███ ███    ███   ███    ███   ███    ███",
-    r" ███    █▀  ███▄▄▄███   ███    █▀  ███    ███   ███    ███   ███    █▀ ",
-    r" ███        ▀▀▀▀▀▀███   ███        ███    ███   ███    ███   ███       ",
-    r" ███        ▄██   ███ ▀███████████ ███    ███ ▀█████████▀  ▀███████████",
-    r" ███    █▄  ███   ███          ███ ███    ███   ███                 ███",
-    r" ███    ███ ███   ███    ▄█    ███ ███    ███   ███          ▄█    ███",
-    r" ████████▀   ▀█████▀   ▄████████▀  ▀██████▀   ▄████▀       ▄████████▀ ",
+BANNER_NEON = [
+    r'██████  ██  ██  ██████  ██████  ██████  ██████',
+    r'██      ██  ██  ██      ██  ██  ██  ██  ██',
+    r'██████   ████   ██████  ██  ██  ██████  ██████',
+    r'    ██    ██        ██  ██  ██  ██          ██',
+    r'    ██    ██        ██  ██  ██  ██          ██',
+    r'██████    ██    ██████  ██████  ██      ██████',
 ]
 
 BANNER_FONTS = {
     "block": BANNER_BLOCK,
     "ghost": BANNER_GHOST,
-    "sharp": BANNER_SHARP,
-    "cyber": BANNER_CYBER,
+    "wave":  BANNER_WAVE,
+    "neon":  BANNER_NEON,
 }
+
+# Back-compat: old saves may reference the retired font names.
+_FONT_ALIASES = {"sharp": "wave", "cyber": "neon"}
 
 def _gradient_line(text, colors):
     if not colors:
@@ -451,10 +491,16 @@ def hr_red(width=None):
     print(f"{BRED}{'─'*w}{R}")
 
 def slow_print(text, delay=0.012):
+    if _SPEED <= 0:                       # instant — emit the whole string
+        sys.stdout.write(text)
+        if not text.endswith("\n"):
+            sys.stdout.write("\n")
+        sys.stdout.flush()
+        return
     for ch in text:
         sys.stdout.write(ch)
         sys.stdout.flush()
-        time.sleep(delay)
+        time.sleep(delay * _SPEED)
     if not text.endswith("\n"):
         print()
 
@@ -476,9 +522,20 @@ def progress_bar(label, total_mb, speed_mb=80, bar_width=36):
     bc    = th["banner_cols"]
     steps = 35
     chunk = total_mb / max(steps, 1)
-    elapsed = 0.0
+    elapsed = total_mb / max(speed_mb, 1)
     label_s = label[:18]
 
+    if _SPEED <= 0:                       # instant — show the completed bar
+        bar = "".join(
+            f"{fg256(bc[min(int(j/bar_width*len(bc)), len(bc)-1)])}█"
+            for j in range(bar_width)) + R
+        print(f"\n  {BCYAN}{label_s:<18}{R}  [{bar}]  "
+              f"{BYELLOW}100.0%{R}  {BGREEN}{speed_mb:.0f} MB/s{R}")
+        print(f"\n  {ok('✓ Transfer complete!')}  "
+              f"{DIM}{total_mb:.0f} MB in {elapsed:.0f}s{R}\n")
+        return
+
+    elapsed = 0.0
     print()
     for i in range(steps + 1):
         pct  = i / steps
@@ -504,7 +561,7 @@ def progress_bar(label, total_mb, speed_mb=80, bar_width=36):
             f"{DIM}ETA {eta:.0f}s{R}"
         )
         sys.stdout.flush()
-        time.sleep(0.032)
+        time.sleep(0.032 * _SPEED)
 
     print(f"\n\n  {ok('✓ Transfer complete!')}  "
           f"{DIM}{total_mb:.0f} MB in {elapsed:.0f}s{R}\n")
@@ -517,13 +574,17 @@ def progress_bar(label, total_mb, speed_mb=80, bar_width=36):
 def spinner(label, duration=1.2):
     th     = get_theme()
     ac     = th["accent"]
+    if _SPEED <= 0:                       # instant — just show the result
+        sys.stdout.write(f"  {BGREEN}✓{R}  {label}\n")
+        sys.stdout.flush()
+        return
     frames = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"]
-    end    = time.time() + duration
+    end    = time.time() + duration * _SPEED
     i      = 0
     while time.time() < end:
         sys.stdout.write(f"\r  {ac}{B}{frames[i%len(frames)]}{R}  {label}")
         sys.stdout.flush()
-        time.sleep(0.07)
+        time.sleep(0.07 * _SPEED)
         i += 1
     sys.stdout.write(f"\r  {BGREEN}✓{R}  {label}{' '*14}\n")
     sys.stdout.flush()
@@ -640,6 +701,24 @@ def font_picker():
     except (ValueError, IndexError):
         return _ACTIVE_FONT
 
+def speed_picker():
+    clear()
+    th = get_theme()
+    print(f"\n  {BWHITE}{B}ANIMATION SPEED{R}\n")
+    print(f"  {DIM}Controls every simulated delay — transfers, scans, typing.{R}\n")
+    for i, (key, label) in enumerate(SPEED_LABELS.items(), 1):
+        cur = ok("  ← current") if key == _ACTIVE_SPEED else ""
+        print(f"  {th['accent']}{B}[{i}] {key.upper():<10}{R}  {DIM}{label}{R}{cur}")
+    print()
+    raw = input(f"  {th['accent']}>{R} ").strip()
+    keys = list(SPEED_PRESETS.keys())
+    try:
+        chosen = keys[int(raw)-1]
+        set_speed(chosen)
+        return chosen
+    except (ValueError, IndexError):
+        return _ACTIVE_SPEED
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SCAN ANIMATION
@@ -650,10 +729,9 @@ def scan_animation(host_ip, duration=2.0):
     ports = random.sample(list(SERVICES.keys()), min(14, len(SERVICES)))
     ports.sort()
     open_ports = []
-    end = time.time() + duration
-    i   = 0
-    while time.time() < end and i < len(ports):
-        p      = ports[i]
+    # Per-port delay derived from the requested duration, then speed-scaled.
+    step = (duration / max(len(ports), 1))
+    for p in ports:
         status = random.choice(["open","open","open","closed","filtered"])
         svc, _ = SERVICES.get(p, ("unknown",""))
         col    = BGREEN if status=="open" else (DIM if status=="closed" else BYELLOW)
@@ -664,7 +742,6 @@ def scan_animation(host_ip, duration=2.0):
         sys.stdout.flush()
         if status == "open":
             open_ports.append((p, svc))
-        time.sleep(0.07)
-        i += 1
+        pause(step)
     print()
     return open_ports

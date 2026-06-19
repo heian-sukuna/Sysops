@@ -741,7 +741,7 @@ class GitModule:
             print(f"  Applying: {dim(_short(new_h))} {c['msg']}")
             c["hash"]  = new_h
             c["short"] = _short(new_h)
-            time.sleep(0.08)
+            pause(0.08)
 
         print(ok(f"\n  Successfully rebased onto '{target}'"))
         print(dim("  Note: rebase rewrites history — avoid on shared branches"))

@@ -85,7 +85,7 @@ class ContainerModule:
         spinner(f"Pulling {img} from registry", 1.4)
         layers = [f"  {(img+str(i))[:12]}:  Pull complete" for i in range(random.randint(3,6))]
         for l in layers:
-            print(dim(l)); time.sleep(0.09)
+            print(dim(l)); pause(0.09)
         if img not in self.w.docker_images:
             self.w.docker_images.append(img)
         print(ok(f"\n  ✓ {img} pulled successfully"))
@@ -204,14 +204,14 @@ class ContainerModule:
         for i, e in enumerate(entries):
             ts = time.strftime(f"%Y-%m-%dT%H:0{i}:00Z")
             print(f"  {dim(ts)}  {e}")
-            time.sleep(0.07)
+            pause(0.07)
         if follow:
             print(dim("  (following — press Ctrl+C to stop)"))
             try:
                 while True:
                     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ")
                     print(f"  {dim(ts)}  GET /api/status 200 {random.randint(1,9)}ms")
-                    time.sleep(1.5)
+                    pause(1.5)
             except KeyboardInterrupt:
                 print(dim("\n  [log stream ended]"))
 
@@ -264,7 +264,7 @@ class ContainerModule:
         print(info(f"\n  Building image: {tag}"))
         for i, step in enumerate(steps, 1):
             print(f"  Step {i}/{len(steps)} : {dim(step)}")
-            time.sleep(0.16)
+            pause(0.16)
         if tag not in self.w.docker_images:
             self.w.docker_images.append(tag)
         print(ok(f"\n  ✓ Successfully built {tag}"))
@@ -397,7 +397,7 @@ class ContainerModule:
                         "ports": ports, "env": [], "volumes": [],
                     }
                 print(ok(f"  ✓ {svc:<12} started"))
-                time.sleep(0.18)
+                pause(0.18)
             self.w.nginx_running = True
             print(info("\n  Network: app-net (bridge)"))
             print(dim("  All services connected on private bridge network"))

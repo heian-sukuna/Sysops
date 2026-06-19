@@ -170,7 +170,7 @@ class NetworkingModule:
         ]
         for i, (ip, name, ms) in enumerate(hops, 1):
             print(f"  {i:2}  {ip} ({name})  {ms} ms  {ms+0.1} ms  {ms+0.2} ms")
-            time.sleep(0.25)
+            pause(0.25)
         print()
         self.s.add_xp(5,"traceroute")
 
@@ -277,7 +277,7 @@ class NetworkingModule:
                 print(f"  IN  [{BGREEN}{bar_rx}{R}] {rx:6.1f} MB/s")
                 print(f"  OUT [{BCYAN}{bar_tx}{R}] {tx:6.1f} MB/s")
                 print(f"  {'─'*50}")
-                time.sleep(0.5)
+                pause(0.5)
         except KeyboardInterrupt:
             pass
         print(dim("  [nload exited]"))
@@ -297,4 +297,4 @@ class NetworkingModule:
                 bw = max(1, bw)
                 print(f"  {src:>18} <=> {dst:<18}  {BCYAN}{bw:6.1f} Mb/s{R}")
             print(f"  {'─'*55}")
-            time.sleep(0.45)
+            pause(0.45)

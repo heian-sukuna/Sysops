@@ -167,7 +167,7 @@ class CyberSecModule:
                 svc, _ = SERVICES[p]
                 print(f"      {p}/tcp  {ok('open')}  {svc}")
             hosts.append(ip)
-            time.sleep(0.12)
+            pause(0.12)
 
         print(f"\n  Nmap done: {n_hosts} hosts up, scanned in {random.uniform(8,20):.2f}s")
         for ip in hosts:
@@ -294,7 +294,7 @@ class CyberSecModule:
                 line = f"{dim(ts)}  {src:<16}  {dst:<16}  {col}{proto:<6}{R}  {ln:>5}  {dim(info_str)}"
                 print(line)
                 packets.append({"n":n,"src":src,"dst":dst,"proto":proto,"len":ln,"info":info_str})
-                time.sleep(0.08)
+                pause(0.08)
 
         except KeyboardInterrupt:
             print(dim("\n  Capture stopped."))
@@ -358,7 +358,7 @@ class CyberSecModule:
 
         found = []
         for path, code, size in paths:
-            time.sleep(0.07)
+            pause(0.07)
             if code == 200:
                 col = ok(f"/{path.lstrip('/')}")
                 status_col = ok(str(code))
@@ -418,7 +418,7 @@ class CyberSecModule:
         for sev_str, finding in findings:
             col = SEVERITY_COLOR.get(sev_str, "")
             print(f"  + {col}{sev_str:<8}{R}  {finding}")
-            time.sleep(0.12)
+            pause(0.12)
 
         print(dim(f"\n  Scan complete. {len(findings)} items found."))
         print(dim(f"  End time: {time.strftime('%Y-%m-%d %H:%M:%S')}"))
@@ -451,7 +451,7 @@ class CyberSecModule:
         attempts = random.randint(45, 120)
         for i in range(min(8, attempts)):
             pwd = random.choice(["password","123456","admin","letmein","qwerty","root"])
-            time.sleep(0.1)
+            pause(0.1)
             print(f"  [{time.strftime('%H:%M:%S')}] {dim(f'attempt {i+1}:')} {user}:{pwd} — {err('FAILED')} ")
 
         # Random success
@@ -494,7 +494,7 @@ class CyberSecModule:
         print(f"  {'HASH':<35} STATUS")
         print(dim("  " + "─" * 50))
         for h in hashes:
-            time.sleep(0.3)
+            pause(0.3)
             if random.random() > 0.4:
                 pwd = random.choice(["monkey","iloveyou","sunshine","football","abc123"])
                 print(f"  {dim(h[:32]+'...'):<35} {ok('Cracked:')} {warn(pwd)}")
@@ -542,7 +542,7 @@ class CyberSecModule:
             print(info(f"  Listening on 0.0.0.0:{port}"))
             if verbose:
                 print(dim("  Ncat: Version 7.95 — listening"))
-            time.sleep(0.5)
+            pause(0.5)
             peer_ip = fake_ip()
             print(ok(f"  Connection from {peer_ip}:{random.randint(40000,60000)}"))
             print(dim("  (simulated shell — type 'exit' to close)"))
@@ -682,7 +682,7 @@ class CyberSecModule:
             print(f"  {cat:<22} [{bar}{' '*(15-tests)}] {ok_n}/{tests}")
             for w in warns:
                 print(f"    {warn('⚠')} {dim(w)}")
-            time.sleep(0.1)
+            pause(0.1)
 
         score = int((total_ok/(total_ok+total_warn))*100)
         score_col = ok(str(score)) if score >= 75 else warn(str(score))

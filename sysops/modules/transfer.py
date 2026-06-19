@@ -139,7 +139,7 @@ class TransferModule:
         for i in range(count):
             ms = round(random.uniform(1.8, 8.2) if not (peer and peer.get("relay")) else random.uniform(28,55), 2)
             print(f"  64 bytes from {ip}: icmp_seq={i+1} ttl=64 time={ms} ms")
-            time.sleep(0.22)
+            pause(0.22)
         print(f"\n  --- {host} ping statistics ---")
         print(f"  {count} packets transmitted, {count} received, 0% packet loss")
         self.s.add_xp(3, "ping")
@@ -161,7 +161,7 @@ class TransferModule:
         if host not in self.w.ssh_keys_copied and self.s.get("difficulty", 2) >= 2:
             print(warn(f"  ⚠ No SSH key installed on {host}. Password auth (simulated)."))
             print(dim(f"  Tip: ssh-keygen && ssh-copy-id {user}@{host}"))
-            time.sleep(0.3)
+            pause(0.3)
             print(dim("  (simulated password accepted)"))
 
         spinner(f"Connecting to {user}@{host}", 0.7)
@@ -371,7 +371,7 @@ class TransferModule:
         if has_progress or size_mb > 5:
             progress_bar(src.split("/")[-1], size_mb, base_speed)
         else:
-            time.sleep(0.6)
+            pause(0.6)
             print(ok(f"  ✓ {src.split('/')[-1]} ({size_mb:.1f} MB) sent"))
             print()
 

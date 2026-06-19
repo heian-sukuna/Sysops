@@ -761,7 +761,7 @@ class RedTeamModule:
                     all_findings.append(item)
                 else:
                     print(f"    {dim(item)}")
-            time.sleep(0.08)
+            pause(0.08)
 
         print(f"\n  {BRED}═══════════════ SUMMARY ═══════════════{R}")
         print(f"  Interesting findings: {BYELLOW}{len(all_findings)}{R}")
@@ -811,7 +811,7 @@ class RedTeamModule:
                     self._rt()["report_items"].append(f"POST: pspy captured credential in process args")
                 else:
                     print(line)
-                time.sleep(0.35)
+                pause(0.35)
         except KeyboardInterrupt:
             pass
 
