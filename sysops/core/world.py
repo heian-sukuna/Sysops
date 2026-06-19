@@ -135,6 +135,13 @@ class VirtualWorld:
         # Git repositories
         self.git_repos = dict(w.get("git_repos", {}))
 
+        # Architecture / Infrastructure-as-Code (terraform) state
+        self.tf_state = dict(w.get("tf_state", {
+            "initialized": False,
+            "planned":     False,
+            "applied":     [],     # resource addresses currently provisioned
+        }))
+
         # Red team engagement state
         self.rt_state = w.get("rt_state", {
             "phase":        "recon",
@@ -184,6 +191,7 @@ class VirtualWorld:
             "captured_packets":self.captured_packets,
             "git_repos":       self.git_repos,
             "rt_state":        self.rt_state,
+            "tf_state":        self.tf_state,
             "cwd":             self.cwd,
         }
 

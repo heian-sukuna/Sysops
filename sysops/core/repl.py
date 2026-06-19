@@ -10,7 +10,7 @@ from core.save import LEVEL_TITLES, level_for_xp, XP_PER_LEVEL, DIFF_NAMES
 # Command vocabulary for tab-completion.
 COMMANDS = sorted({
     "help", "save", "xp", "stats", "status", "missions", "mission", "challenge",
-    "abandon", "achievements", "theme", "font", "clear", "history", "quit", "exit",
+    "abandon", "achievements", "theme", "font", "speed", "clear", "history", "quit", "exit",
     "tailscale", "ssh", "ssh-keygen", "ssh-copy-id", "rsync", "ping",
     "docker", "docker-compose", "compose", "nginx",
     "netstat", "ss", "ip", "ifconfig", "traceroute", "dig", "nslookup", "curl",
@@ -21,6 +21,7 @@ COMMANDS = sorted({
     "theharvester", "amass", "dnsenum", "whois", "searchsploit", "msfvenom",
     "msfconsole", "linpeas", "pspy", "enum4linux", "crackmapexec", "responder",
     "sqlmap", "report", "killchain",
+    "terraform", "tf", "diagram",
     "ls", "cd", "pwd", "whoami", "hostname", "df", "free", "uname", "cat",
     "mkdir", "touch", "rm", "cp", "mv", "top", "htop", "ps", "man", "which",
     "echo", "env", "date", "uptime", "sudo",
@@ -29,6 +30,7 @@ COMMANDS = sorted({
 HELP_TOPICS = sorted({
     "rsync", "docker", "compose", "nginx", "nmap", "tailscale", "ssh",
     "networking", "cybersec", "combo", "git", "redteam",
+    "architecture", "terraform", "diagram",
 })
 
 
@@ -38,11 +40,13 @@ class GameREPL:
         self.s  = save
         self.sc = scenario_engine
 
-        # Apply saved theme/font on startup
+        # Apply saved theme/font/speed on startup
         saved_theme = self.s.get("color_theme", "cyberpunk")
         saved_font  = self.s.get("banner_font",  "block")
+        saved_speed = self.s.get("anim_speed",   "cinematic")
         set_theme(saved_theme)
         set_font(saved_font)
+        set_speed(saved_speed)
 
         from modules.transfer   import TransferModule
         from modules.containers import ContainerModule
@@ -50,13 +54,15 @@ class GameREPL:
         from modules.cybersec   import CyberSecModule
         from modules.git        import GitModule
         from modules.redteam    import RedTeamModule
+        from modules.architecture import ArchitectureModule
 
-        self.transfer   = TransferModule(world, save)
-        self.containers = ContainerModule(world, save)
-        self.networking = NetworkingModule(world, save)
-        self.cybersec   = CyberSecModule(world, save)
-        self.git_mod    = GitModule(world, save)
-        self.redteam    = RedTeamModule(world, save)
+        self.transfer     = TransferModule(world, save)
+        self.containers   = ContainerModule(world, save)
+        self.networking   = NetworkingModule(world, save)
+        self.cybersec     = CyberSecModule(world, save)
+        self.git_mod      = GitModule(world, save)
+        self.redteam      = RedTeamModule(world, save)
+        self.architecture = ArchitectureModule(world, save)
 
         self._session_cmds    = 0
         self._challenge_timer = 0
@@ -245,6 +251,12 @@ class GameREPL:
             self.s.save()
             print(ok(f"  ✓ Font: {chosen}"))
 
+        elif cmd == "speed":
+            chosen = speed_picker()
+            self.s.data["anim_speed"] = chosen
+            self.s.save()
+            print(ok(f"  ✓ Animation speed: {chosen}"))
+
         # ── Tailscale ─────────────────────────────────────────────────────────
         elif cmd == "tailscale":
             self.transfer.tailscale(args)
@@ -373,6 +385,12 @@ class GameREPL:
         elif cmd == "killchain":
             self.redteam.kill_chain_status()
 
+        # ── Architecture (IaC & design) ────────────────────────────────────────
+        elif cmd in ("terraform", "tf"):
+            self.architecture.terraform(args)
+        elif cmd == "diagram":
+            self.architecture.diagram(args)
+
         # ── System / filesystem ───────────────────────────────────────────────
         elif cmd == "ls":
             self._ls(args)
@@ -493,6 +511,8 @@ class GameREPL:
             self.git_mod._help()
         elif topic in ("redteam","red","pentest","rt"):
             self.redteam.help()
+        elif topic in ("architecture","arch","terraform","tf","iac","diagram"):
+            self.architecture.help()
         else:
             self._full_help()
 
@@ -556,6 +576,12 @@ class GameREPL:
                 ("report [file.md]",               "generate engagement report"),
                 ("killchain",                      "kill chain phase tracker"),
             ]),
+            ("Architecture  (IaC & design)", [
+                ("terraform init/plan/apply",   "infrastructure as code workflow"),
+                ("terraform show/output/destroy","inspect & tear down"),
+                ("diagram",                     "visualize your live infrastructure"),
+                ("diagram web/k8s/vpc",          "reference system-design topologies"),
+            ]),
             ("Game", [
                 ("missions",        "list all missions"),
                 ("mission <id>",    "start a mission  e.g. mission ts01"),
@@ -564,6 +590,7 @@ class GameREPL:
                 ("xp",              "XP, level, stats"),
                 ("theme",           "change colour palette live"),
                 ("font",            "change banner font live"),
+                ("speed",           "animation speed: cinematic/fast/instant"),
                 ("achievements",    "earned badges"),
                 ("save",            "manual save"),
                 ("help <module>",   "deep-dive reference  (git · docker · rsync…)"),

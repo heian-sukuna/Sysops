@@ -171,11 +171,11 @@ def new_game_wizard(save: SaveManager):
     if difficulty == 1:
         hints_enabled = True
         print(f"  {ok('✓')} Hints are {ok('always ON')} in Easy mode.")
-        time.sleep(0.5)
+        pause(0.5)
     elif difficulty == 4:
         hints_enabled = False
         print(f"  {warn('!')} Nightmare mode — hints are {err('permanently OFF')}.")
-        time.sleep(0.5)
+        pause(0.5)
     else:
         diff_name = "Medium" if difficulty == 2 else "Hard"
         print(f"  {DIM}{diff_name} mode selected.{R}  Enable hints during missions?")
@@ -184,7 +184,7 @@ def new_game_wizard(save: SaveManager):
         h_raw = input(f"  {th['accent']}>{R} ").strip()
         hints_enabled = h_raw != "2"
         print(f"  {ok('✓')} Hints {'enabled' if hints_enabled else 'disabled'}.")
-        time.sleep(0.4)
+        pause(0.4)
 
     # ── Step 5: Focus module ───────────────────────────────────────────────
     _header()
@@ -258,26 +258,28 @@ def options_screen(save: SaveManager):
         focus     = d.get("focus_module","rsync") or "rsync"
         cur_theme = d.get("color_theme","cyberpunk")
         cur_font  = d.get("banner_font","block")
+        cur_speed = d.get("anim_speed","cinematic")
 
         section("OPTIONS & SETTINGS")
 
         opts = [
             ("1", "Colour Theme",    f"{th['accent']}{B}{THEMES.get(cur_theme,{}).get('name','?')}{R}"),
             ("2", "Banner Font",     f"{DIM}{cur_font}{R}"),
-            ("3", "Difficulty",      f"{warn(diff_name)}"),
-            ("4", "Hints",           hints_val),
-            ("5", "Focus Module",    f"{th['cmd']}{B}{focus}{R}"),
-            ("6", "Combo Guide",     dim("combined workflow reference")),
-            ("7", "Username/Host",   dim(f"{d.get('username')}@{d.get('hostname')}")),
-            ("8", "Achievements",    dim(f"{len(d.get('achievements',[]))} earned")),
-            ("9", "Delete Save",     err("⚠ permanent")),
+            ("3", "Animation Speed", f"{th['cmd']}{B}{cur_speed}{R}"),
+            ("4", "Difficulty",      f"{warn(diff_name)}"),
+            ("5", "Hints",           hints_val),
+            ("6", "Focus Module",    f"{th['cmd']}{B}{focus}{R}"),
+            ("7", "Combo Guide",     dim("combined workflow reference")),
+            ("8", "Username/Host",   dim(f"{d.get('username')}@{d.get('hostname')}")),
+            ("9", "Achievements",    dim(f"{len(d.get('achievements',[]))} earned")),
+            ("d", "Delete Save",     err("⚠ permanent")),
             ("0", "Back",            ""),
         ]
         for key, label, val in opts:
             print(f"  {th['accent']}{B}[{key}]{R}  {BWHITE}{label:<18}{R}  {val}")
 
         print()
-        raw = input(f"  {th['accent']}▶{R} ").strip()
+        raw = input(f"  {th['accent']}▶{R} ").strip().lower()
 
         if raw in ("0","b","back","q"):
             break
@@ -293,6 +295,11 @@ def options_screen(save: SaveManager):
             set_font(chosen)
 
         elif raw == "3":
+            chosen = speed_picker()
+            d["anim_speed"] = chosen
+            set_speed(chosen)
+
+        elif raw == "4":
             _header()
             section("DIFFICULTY")
             for n, name, col, desc in [
@@ -307,11 +314,11 @@ def options_screen(save: SaveManager):
                 d["difficulty"]    = max(1,min(4,int(r2)))
                 d["hints_enabled"] = d["difficulty"] <= 2
                 print(ok(f"  ✓ Difficulty updated"))
-                time.sleep(0.6)
+                pause(0.6)
             except ValueError:
                 pass
 
-        elif raw == "4":
+        elif raw == "5":
             difficulty = d.get("difficulty", 2)
             if difficulty == 1:
                 print(info("  Hints are always ON in Easy mode — cannot be disabled."))
@@ -320,34 +327,34 @@ def options_screen(save: SaveManager):
             else:
                 d["hints_enabled"] = not d.get("hints_enabled", True)
                 print(ok(f"  Hints: {'ON' if d['hints_enabled'] else 'OFF'}"))
-            time.sleep(0.5)
-
-        elif raw == "5":
-            _choose_focus(save)
+            pause(0.5)
 
         elif raw == "6":
+            _choose_focus(save)
+
+        elif raw == "7":
             _combo_guide()
             input(dim("\n  Press Enter to continue…"))
 
-        elif raw == "7":
+        elif raw == "8":
             print()
             nu = input(f"  New username [{d['username']}]: ").strip() or d["username"]
             nh = input(f"  New hostname [{d['hostname']}]: ").strip() or d["hostname"]
             d["username"] = nu
             d["hostname"] = nh
             print(ok(f"  ✓ {nu}@{nh}"))
-            time.sleep(0.5)
+            pause(0.5)
 
-        elif raw == "8":
+        elif raw == "9":
             _show_achievements(save)
             input(dim("\n  Press Enter…"))
 
-        elif raw == "9":
+        elif raw in ("d","delete"):
             confirm = input(warn("  Type DELETE to confirm: ")).strip()
             if confirm == "DELETE":
                 save.delete()
                 print(ok("  Save deleted."))
-                time.sleep(1)
+                pause(1)
                 break
 
         save.save()
@@ -380,7 +387,7 @@ def _choose_focus(save: SaveManager):
         save.data["focus_module"] = mod
         print(ok(f"  ✓ Focus: {mod}"))
         _show_module_commands(mod, th)
-        time.sleep(0.8)
+        pause(0.8)
     except (ValueError, IndexError):
         pass
 

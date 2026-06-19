@@ -34,8 +34,9 @@ DEFAULT_PROFILE = {
     # Settings
     "difficulty": 2,              # 1=easy 2=medium 3=hard 4=nightmare
     "hints_enabled": True,
-    "slow_print": True,
+    "anim_speed": "cinematic",    # cinematic | fast | instant
     "color_theme": "cyberpunk",
+    "banner_font": "block",
 
     # World state (persisted between sessions)
     "world": {
