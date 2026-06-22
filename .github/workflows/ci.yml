@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run unit tests (pure stdlib, no deps)
+        run: python -m unittest discover -s tests -v
+
+      - name: Smoke-import the package and count missions
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "sysops")
+          import core.repl, core.world, core.save, core.ui          # all modules import
+          from scenarios.missions import SCENARIOS, QUICK_CHALLENGES
+          ids = [s["id"] for s in SCENARIOS]
+          dupes = {i for i in ids if ids.count(i) > 1}
+          assert not dupes, f"duplicate mission ids: {dupes}"
+          for s in SCENARIOS:
+              assert all(k in s for k in ("id","title","category","difficulty","tags","story","steps","xp_reward"))
+              assert all(len(st) == 3 and callable(st[1]) for st in s["steps"])
+          print(f"OK: {len(SCENARIOS)} missions, {len(QUICK_CHALLENGES)} quick challenges, no dupes")
+          PY
