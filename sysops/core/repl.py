@@ -22,6 +22,7 @@ COMMANDS = sorted({
     "msfconsole", "linpeas", "pspy", "enum4linux", "crackmapexec", "responder",
     "sqlmap", "report", "killchain",
     "terraform", "tf", "diagram",
+    "journalctl", "grep", "siem", "alerts", "ioc", "incident", "last", "who",
     "ls", "cd", "pwd", "whoami", "hostname", "df", "free", "uname", "cat",
     "mkdir", "touch", "rm", "cp", "mv", "top", "htop", "ps", "man", "which",
     "echo", "env", "date", "uptime", "sudo",
@@ -31,6 +32,7 @@ HELP_TOPICS = sorted({
     "rsync", "docker", "compose", "nginx", "nmap", "tailscale", "ssh",
     "networking", "cybersec", "combo", "git", "redteam",
     "architecture", "terraform", "diagram",
+    "defense", "soc", "blueteam", "siem", "incident",
 })
 
 
@@ -55,6 +57,7 @@ class GameREPL:
         from modules.git        import GitModule
         from modules.redteam    import RedTeamModule
         from modules.architecture import ArchitectureModule
+        from modules.defense    import DefenseModule
 
         self.transfer     = TransferModule(world, save)
         self.containers   = ContainerModule(world, save)
@@ -63,11 +66,14 @@ class GameREPL:
         self.git_mod      = GitModule(world, save)
         self.redteam      = RedTeamModule(world, save)
         self.architecture = ArchitectureModule(world, save)
+        self.defense      = DefenseModule(world, save)
 
         self._session_cmds    = 0
         self._challenge_timer = 0
         self._readline = None
         self._histfile = None
+        self._completions = []      # cached matches for the active Tab cycle
+        self._mission_ids = None    # memoized sorted mission-id list (static)
 
     # ── Readline: arrow-key history + tab completion ──────────────────────────
 
@@ -98,24 +104,40 @@ class GameREPL:
                 pass
 
     def _completer(self, text, state):
-        rl  = self._readline
-        buf = rl.get_line_buffer()
-        head = buf[:rl.get_begidx()].split()
+        # readline invokes this repeatedly (state 0, 1, 2, …) to pull matches one
+        # at a time for a single Tab press. Build the candidate list once, on the
+        # first call of the cycle, then just index into it — instead of rebuilding,
+        # re-importing, re-scanning the filesystem, and re-sorting on every call.
+        if state == 0:
+            self._completions = self._compute_completions(text)
+        try:
+            return self._completions[state]
+        except IndexError:
+            return None
+
+    def _compute_completions(self, text):
+        rl   = self._readline
+        head = rl.get_line_buffer()[:rl.get_begidx()].split()
         if not head:
             options = [c for c in COMMANDS if c.startswith(text)]
         else:
             cmd = head[0].lower()
             if cmd in ("mission", "missions"):
-                from scenarios.missions import SCENARIOS
-                options = [sc["id"] for sc in SCENARIOS if sc["id"].startswith(text)]
+                options = [m for m in self._mission_id_list() if m.startswith(text)]
             elif cmd in ("help", "man"):
                 options = [t for t in HELP_TOPICS if t.startswith(text)]
             elif cmd in ("cd", "ls", "cat", "rm", "cp", "mv", "less", "more"):
                 options = [p for p in self._path_options() if p.startswith(text)]
             else:
                 options = [c for c in COMMANDS if c.startswith(text)]
-        options = sorted(set(options))
-        return options[state] if state < len(options) else None
+        return sorted(set(options))
+
+    def _mission_id_list(self):
+        """Sorted mission IDs for tab-completion (memoized — SCENARIOS is static)."""
+        if self._mission_ids is None:
+            from scenarios.missions import SCENARIOS
+            self._mission_ids = sorted(sc["id"] for sc in SCENARIOS)
+        return self._mission_ids
 
     def _path_options(self):
         """Child names under the current directory (dirs get a trailing /)."""
@@ -391,6 +413,24 @@ class GameREPL:
         elif cmd == "diagram":
             self.architecture.diagram(args)
 
+        # ── Blue Team / SOC (defensive) ──────────────────────────────────────────
+        elif cmd in ("journalctl", "journal"):
+            self.defense.journalctl(args)
+        elif cmd == "grep":
+            self.defense.grep(args)
+        elif cmd == "siem":
+            self.defense.siem(args)
+        elif cmd == "alerts":
+            self.defense.siem(["alerts"])
+        elif cmd == "ioc":
+            self.defense.ioc(args)
+        elif cmd in ("incident", "ir"):
+            self.defense.incident(args)
+        elif cmd == "last":
+            self.defense.last(args)
+        elif cmd == "who":
+            self.defense.who(args)
+
         # ── System / filesystem ───────────────────────────────────────────────
         elif cmd == "ls":
             self._ls(args)
@@ -513,6 +553,9 @@ class GameREPL:
             self.redteam.help()
         elif topic in ("architecture","arch","terraform","tf","iac","diagram"):
             self.architecture.help()
+        elif topic in ("defense","soc","blueteam","blue","siem","journalctl",
+                       "incident","ioc","ir"):
+            self.defense.help()
         else:
             self._full_help()
 
@@ -581,6 +624,16 @@ class GameREPL:
                 ("terraform show/output/destroy","inspect & tear down"),
                 ("diagram",                     "visualize your live infrastructure"),
                 ("diagram web/k8s/vpc",          "reference system-design topologies"),
+            ]),
+            ("Blue Team / SOC  (defensive)", [
+                ("journalctl -u sshd",          "read systemd service logs"),
+                ("grep <pat> auth.log",          "search the raw log files"),
+                ("last / who",                   "review login sessions"),
+                ("siem dashboard/alerts",        "the SIEM alert queue"),
+                ("siem investigate/ack/escalate","triage an alert"),
+                ("ioc add/list/export",          "indicators of compromise"),
+                ("incident status/timeline",     "incident-response workflow"),
+                ("incident contain/report",      "block the attacker · write it up"),
             ]),
             ("Game", [
                 ("missions",        "list all missions"),

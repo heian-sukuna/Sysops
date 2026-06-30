@@ -32,8 +32,18 @@ _save_mod.SAVE_FILE = _TMP / "save.json"
 _save_mod.LOG_FILE = _TMP / "session.log"
 from core.world import VirtualWorld
 from core import ui
+ui.set_speed("instant")   # no animation delays during tests
 from scenarios.checks import ran, ran_any, ran_re, either
 from scenarios.missions import SCENARIOS, QUICK_CHALLENGES, get_scenario
+
+import io
+import contextlib
+
+
+def _quiet(fn, *a, **k):
+    """Run a noisy (printing) module method, swallowing its stdout."""
+    with contextlib.redirect_stdout(io.StringIO()):
+        return fn(*a, **k)
 
 
 def _fresh_save():
@@ -93,6 +103,18 @@ def _rich_world():
         "exploited": True,
         "privesc_done": True,
         "listener_up": True,
+    })
+    w.defense_state.update({
+        "incident_open": True,
+        "attacker_ip": w.attacker_ip,
+        "alerts_investigated": [1, 2],
+        "alerts_acked": [5],
+        "alerts_escalated": [1],
+        "iocs": [{"type": "ipv4", "value": w.attacker_ip, "note": ""},
+                 {"type": "username", "value": "deploy", "note": "compromised"}],
+        "timeline": ["02:11 brute force begins", "02:12 login as deploy"],
+        "blocked_ips": [w.attacker_ip],
+        "report_done": True,
     })
     return w
 
@@ -295,6 +317,112 @@ class TestEngineAdvance(unittest.TestCase):
         eng.check_after_command()                 # satisfied -> completes
         self.assertIsNone(eng.active)
         self.assertIn("zzz_test", s.get("completed_scenarios"))
+
+
+class TestDefense(unittest.TestCase):
+    """Blue-team / SOC module: world environment + analyst tool behaviour."""
+
+    def setUp(self):
+        from modules.defense import DefenseModule
+        self.w = VirtualWorld({})
+        self.s = _fresh_save()
+        self.d = DefenseModule(self.w, self.s)
+
+    def test_world_builds_consistent_intrusion(self):
+        # The brute force lands on the breached account, from the attacker IP.
+        from core.world import BREACHED_USER
+        sshd = " ".join(m for _, _, m in self.w.logs["sshd"])
+        self.assertIn("Accepted password for " + BREACHED_USER, sshd)
+        self.assertIn(self.w.attacker_ip, sshd)
+        self.assertEqual(len(self.w.siem_alerts), 5)
+        # The CRITICAL alert points at the same attacker IP.
+        crit = self.w.alert_by_id(1)
+        self.assertEqual(crit["severity"], "CRITICAL")
+        self.assertEqual(crit["src"], self.w.attacker_ip)
+
+    def test_defense_state_roundtrips(self):
+        self.w.defense_state["report_done"] = True
+        self.w.defense_state["iocs"].append({"type": "ipv4", "value": "1.2.3.4", "note": ""})
+        w2 = VirtualWorld({"world": self.w.to_dict()})
+        self.assertTrue(w2.defense_state["report_done"])
+        self.assertEqual(w2.attacker_ip, self.w.attacker_ip)
+        self.assertEqual(len(w2.defense_state["iocs"]), 1)
+
+    def test_investigate_confirms_attacker_ip(self):
+        self.assertIsNone(self.w.defense_state["attacker_ip"])
+        _quiet(self.d.siem, ["investigate", "1"])
+        self.assertEqual(self.w.defense_state["attacker_ip"], self.w.attacker_ip)
+        self.assertIn(1, self.w.defense_state["alerts_investigated"])
+
+    def test_ack_and_escalate(self):
+        _quiet(self.d.siem, ["ack", "5"])
+        self.assertIn(5, self.w.defense_state["alerts_acked"])
+        self.assertEqual(self.w.alert_status(5), "CLOSED")
+        self.assertFalse(self.w.defense_state["incident_open"])
+        _quiet(self.d.siem, ["escalate", "1"])
+        self.assertTrue(self.w.defense_state["incident_open"])
+        self.assertEqual(self.w.alert_status(1), "ESCALATED")
+
+    def test_ioc_classify_and_dedup(self):
+        self.assertEqual(self.d._classify("45.142.1.2"), "ipv4")
+        self.assertEqual(self.d._classify("a" * 32), "md5")
+        self.assertEqual(self.d._classify("a" * 64), "sha256")
+        self.assertEqual(self.d._classify("evil@bad.com"), "email")
+        self.assertEqual(self.d._classify("bad.example.com"), "domain")
+        _quiet(self.d.ioc, ["add", "45.142.1.2"])
+        _quiet(self.d.ioc, ["add", "45.142.1.2"])   # duplicate ignored
+        self.assertEqual(len(self.w.defense_state["iocs"]), 1)
+
+    def test_contain_and_report(self):
+        atk = self.w.attacker_ip
+        _quiet(self.d.incident, ["contain", atk])
+        self.assertIn(atk, self.w.defense_state["blocked_ips"])
+        self.assertTrue(self.w.defense_state["incident_open"])
+        self.assertFalse(self.w.defense_state["report_done"])
+        _quiet(self.d.incident, ["report"])
+        self.assertTrue(self.w.defense_state["report_done"])
+
+    def test_grep_finds_brute_force(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.d.grep(["Failed password", "/var/log/auth.log"])
+        out = ui.strip_ansi(buf.getvalue())
+        self.assertIn("Failed password", out)
+        self.assertIn(self.w.attacker_ip, out)
+
+    def test_ir_phase_progression(self):
+        self.assertEqual(self.d._ir_phase(), "detect")
+        self.w.defense_state["alerts_investigated"].append(1)
+        self.assertEqual(self.d._ir_phase(), "triage")
+        self.w.defense_state["attacker_ip"] = self.w.attacker_ip
+        self.assertEqual(self.d._ir_phase(), "contain")
+        self.w.defense_state["blocked_ips"].append(self.w.attacker_ip)
+        self.assertEqual(self.d._ir_phase(), "recover")
+        self.w.defense_state["report_done"] = True
+        self.assertEqual(self.d._ir_phase(), "report")
+
+
+class TestSocMissions(unittest.TestCase):
+    """The SOC pillar is registered and its steps respond to defense_state."""
+
+    def test_soc_missions_registered(self):
+        ids = {sc["id"] for sc in SCENARIOS}
+        for mid in ("soc01", "soc02", "soc03", "soc04"):
+            self.assertIn(mid, ids)
+
+    def test_soc_steps_respond_to_world(self):
+        """Each world-state SOC step is False on an empty world and True on a
+        fully-populated one — proving it tracks real progress, not a constant."""
+        empty = VirtualWorld({})
+        rich = _rich_world()
+        rich.cmd_log = [hint for sc in SCENARIOS for _, _, hint in sc["steps"]]
+        for mid in ("soc01", "soc02", "soc03", "soc04"):
+            sc = get_scenario(mid)
+            for desc, fn, _ in sc["steps"]:
+                self.assertFalse(fn(empty, _fresh_save()),
+                                 f"{mid}: {desc!r} should be False on empty world")
+                self.assertTrue(fn(rich, _fresh_save()),
+                                f"{mid}: {desc!r} should be True on rich world")
 
 
 if __name__ == "__main__":

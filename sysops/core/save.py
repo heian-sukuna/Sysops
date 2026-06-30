@@ -50,6 +50,8 @@ DEFAULT_PROFILE = {
         "nginx_configs": {},
         "known_hosts": {},          # from nmap scans
         "captured_packets": [],     # from wireshark sessions
+        "attacker_ip": None,        # SOC: fixed intruder IP for the host logs
+        "defense_state": {},        # SOC: triage / IOC / IR progress
     },
 
     # Achievement flags

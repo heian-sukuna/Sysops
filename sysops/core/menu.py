@@ -200,6 +200,7 @@ def new_game_wizard(save: SaveManager):
         ("cybersec",   "Security — nmap, tshark, gobuster, nikto, hydra, lynis"),
         ("git",        "Version control — full git workflow, rebase, bisect"),
         ("redteam",    "Red team — recon, msfconsole, linpeas, sqlmap, report"),
+        ("defense",    "Blue team — logs, SIEM triage, IOCs, incident response"),
         ("combo",      "Everything — full-stack workflow missions"),
     ]
     for i, (mod, desc) in enumerate(modules, 1):
@@ -375,6 +376,7 @@ def _choose_focus(save: SaveManager):
         ("cybersec",   "Security — nmap, tshark, gobuster, nikto, hydra, lynis"),
         ("git",        "Version control — init, branch, rebase, stash, bisect"),
         ("redteam",    "Red team — recon, msfconsole, linpeas, sqlmap, report"),
+        ("defense",    "Blue team — logs, SIEM triage, IOCs, incident response"),
         ("combo",      "All combined — full-stack missions"),
         ("ssh",        "SSH — keygen, copy-id, sessions"),
     ]
@@ -417,6 +419,12 @@ def _show_module_commands(mod, th):
                        "msfvenom -p linux/x64/meterpreter/reverse_tcp LHOST=x LPORT=4444 -f elf -o shell.elf",
                        "msfconsole","linpeas","sqlmap -u 'http://host/?id=1' --dbs --dump",
                        "report engagement.md"],
+        "defense":    ["journalctl -u sshd -n 30",
+                       "grep \"Failed password\" /var/log/auth.log",
+                       "siem dashboard / siem alerts",
+                       "siem investigate 1 / siem escalate 1",
+                       "ioc add <attacker-ip> / ioc export",
+                       "incident contain <ip> / incident report"],
     }
     cmds = cheatsheets.get(mod, [])
     if cmds:

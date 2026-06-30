@@ -594,7 +594,9 @@ QUICK_CHALLENGES = [
 from scenarios.git_redteam_missions import GIT_MISSIONS, REDTEAM_MISSIONS
 from scenarios.architecture_missions import ARCH_MISSIONS
 from scenarios.blueteam_missions import BLUETEAM_MISSIONS
-SCENARIOS = SCENARIOS + GIT_MISSIONS + REDTEAM_MISSIONS + ARCH_MISSIONS + BLUETEAM_MISSIONS
+from scenarios.soc_missions import SOC_MISSIONS
+SCENARIOS = (SCENARIOS + GIT_MISSIONS + REDTEAM_MISSIONS + ARCH_MISSIONS
+             + BLUETEAM_MISSIONS + SOC_MISSIONS)
 
 def get_scenario(sid):
     return next((s for s in SCENARIOS if s["id"] == sid), None)

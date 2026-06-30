@@ -38,11 +38,13 @@ modules/cybersec.py      nmap, tshark, gobuster, nikto, hydra, hashcat, ufw, fai
 modules/git.py           git (full subcommand coverage)
 modules/redteam.py       theHarvester, amass, searchsploit, msfvenom, msfconsole, sqlmap, linpeas, etc.
 modules/architecture.py  terraform/tf, diagram (IaC workflow + topology visualization)
+modules/defense.py       journalctl, grep, last, who, siem, ioc, incident (blue-team/SOC analyst tools)
 
 scenarios/missions.py              SCENARIOS list + QUICK_CHALLENGES; imports & appends the pillar files below
 scenarios/git_redteam_missions.py  Git and red-team pillar missions (GIT_MISSIONS, REDTEAM_MISSIONS)
 scenarios/architecture_missions.py Architecture/IaC pillar missions (ARCH_MISSIONS)
 scenarios/blueteam_missions.py     Blue-team/hardening pillar missions (BLUETEAM_MISSIONS)
+scenarios/soc_missions.py          Blue-team/SOC detection & IR pillar missions (SOC_MISSIONS)
 scenarios/checks.py                Step-check predicate helpers (ran/ran_any/ran_re/either)
 scenarios/engine.py                ScenarioEngine — runs missions, checks step completion, awards XP
 ```
@@ -54,6 +56,8 @@ actually ran the command (use `scenarios/checks.py`) — never `lambda w, s: Tru
 ### Key data contracts
 
 **VirtualWorld** holds all runtime state. It is constructed from `save.data["world"]` at startup and serialized back via `world.to_dict()` before every save. Modules receive `(world, save)` at construction and mutate `world` to reflect command effects.
+
+The blue-team/SOC simulation lives in `world.defense_state` (persisted IR progress: confirmed attacker IP, triaged/acked/escalated alert ids, IOCs, timeline, blocked IPs, report flag) plus `world.logs` and `world.siem_alerts` (regenerated each session from the persisted `attacker_ip` by `_build_soc_environment`, like `listening_ports`). The DefenseModule reads the logs/alerts and writes player progress into `defense_state`; SOC mission steps verify that progress. Keep the logs, the SIEM alerts, and the IOCs telling **one** consistent intrusion story.
 
 **Missions** are plain dicts:
 ```python

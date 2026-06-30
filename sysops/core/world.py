@@ -58,6 +58,14 @@ VULN_DB = {
     6379: [("HIGH",   "Redis no authentication configured", "CVE-2022-0543")],
 }
 
+# ── Blue-team / SOC simulation ────────────────────────────────────────────────
+# A self-consistent intrusion is baked into the host logs so the defensive tools
+# (journalctl, grep, siem, ioc, incident) all tell the same story: an external
+# host brute-forces SSH, lands on the 'deploy' account, escalates via a sudo
+# misconfig, and scans the web app. The breached account is fixed so missions
+# can verify the player actually found it.
+BREACHED_USER = "deploy"
+
 class VirtualWorld:
     def __init__(self, save_data: dict):
         w = save_data.get("world", {})
@@ -157,6 +165,29 @@ class VirtualWorld:
             "report_items": [],
         })
 
+        # Blue-team / SOC engagement state (persisted progress).
+        # The attacker IP is persisted so the host logs, SIEM alerts and the
+        # IOCs/timeline the player records all stay consistent across sessions.
+        self.attacker_ip = w.get("attacker_ip") or fake_ip("45.142")
+        self.defense_state = dict(w.get("defense_state", {
+            "incident_open":       False,   # an alert has been escalated
+            "attacker_ip":         None,    # confirmed once the player investigates
+            "alerts_investigated": [],      # SIEM alert ids opened
+            "alerts_acked":        [],      # SIEM alert ids closed as benign
+            "alerts_escalated":    [],      # SIEM alert ids raised to incident
+            "iocs":                [],      # [{"type":..., "value":...}]
+            "timeline":            [],      # ["HH:MM  event"] reconstructed by analyst
+            "blocked_ips":         [],      # IPs contained at the firewall
+            "report_done":         False,   # incident report generated
+        }))
+
+        # Simulated log sources + SIEM alert queue. Regenerated each session
+        # from the (persisted) attacker IP — like listening_ports, these are
+        # live views, not saved state. Player progress lives in defense_state.
+        self.logs        = {}
+        self.siem_alerts = []
+        self._build_soc_environment(save_data)
+
         # Networking state
         self.local_interfaces = {
             "eth0":    {"ip":"192.168.1.42","mac":fake_mac(),"up":True},
@@ -192,8 +223,130 @@ class VirtualWorld:
             "git_repos":       self.git_repos,
             "rt_state":        self.rt_state,
             "tf_state":        self.tf_state,
+            "attacker_ip":     self.attacker_ip,
+            "defense_state":   self.defense_state,
             "cwd":             self.cwd,
         }
+
+    # ── Blue-team / SOC environment ───────────────────────────────────────────
+
+    def _build_soc_environment(self, save_data):
+        """Populate self.logs and self.siem_alerts with a self-consistent
+        intrusion story keyed off self.attacker_ip. Called once per session."""
+        atk  = self.attacker_ip
+        prof = save_data if isinstance(save_data, dict) else {}
+        host = prof.get("hostname", "server")
+        base = time.strftime("%b %d")
+        usr  = BREACHED_USER
+
+        def t(h, m, s=0):
+            return f"{base} {h:02d}:{m:02d}:{s:02d}"
+
+        # Each entry is (timestamp, priority, message). journalctl/grep print the
+        # unit/identifier separately, so messages don't repeat it.
+        # --- /var/log/auth.log (journalctl -u sshd) : the brute force + breach
+        auth = []
+        for i in range(8):
+            who = random.choice(["admin", "root", "test", "oracle", "ubuntu", usr])
+            auth.append((t(2, 11, 10 + i * 3), "info",
+                         f"Failed password for "
+                         f"{'invalid user ' if who not in ('root', usr) else ''}{who} "
+                         f"from {atk} port {random.randint(40000, 60000)} ssh2"))
+        auth.append((t(2, 12, 4), "notice",
+                     f"Accepted password for {usr} from {atk} "
+                     f"port {random.randint(40000, 60000)} ssh2"))
+        auth.append((t(2, 12, 4), "info",
+                     f"pam_unix(sshd:session): session opened for user {usr}(uid=1001)"))
+
+        # --- sudo : privilege escalation right after the breach
+        sudo = [
+            (t(2, 13, 30), "notice",
+             f"{usr} : TTY=pts/1 ; PWD=/home/{usr} ; USER=root ; COMMAND=/bin/bash"),
+            (t(2, 13, 31), "info",
+             f"pam_unix(sudo:session): session opened for user root by {usr}(uid=1001)"),
+        ]
+
+        # --- nginx access log : web path scanning from the same IP
+        paths = ["/admin", "/.env", "/wp-login.php", "/phpmyadmin",
+                 "/.git/config", "/api/v1/users", "/backup.zip"]
+        nginx = [(t(2, 9, 50 + i), "info",
+                  f'{atk} - - "GET {p} HTTP/1.1" {random.choice([404, 403, 404, 200])} '
+                  f'{random.randint(150, 900)} "-" "Mozilla/5.0 (compatible; Nmap)"')
+                 for i, p in enumerate(paths)]
+
+        # --- a few benign lines so logs aren't 100% malicious
+        kernel = [
+            (t(0, 0, 1), "info", "Linux version 6.8.0-arch1-1 (SMP PREEMPT_DYNAMIC)"),
+            (t(1, 30, 0), "info",
+             f"[UFW BLOCK] IN=eth0 SRC={fake_ip()} DST=192.168.1.42 PROTO=TCP DPT=23"),
+        ]
+        cron = [
+            (t(3, 0, 0), "info", "(root) CMD (/usr/local/bin/backup.sh)"),
+            (t(3, 0, 5), "info", "nightly backup completed -> /mnt/storage"),
+        ]
+
+        self.logs = {
+            "sshd":   auth,
+            "sudo":   sudo,
+            "nginx":  nginx,
+            "kernel": kernel,
+            "cron":   cron,
+        }
+
+        # --- SIEM alert queue (base status 'new'; player progress overlaid
+        #     from defense_state at display time). Mix of true + benign so the
+        #     job is real triage, not click-everything.
+        self.siem_alerts = [
+            {"id": 1, "severity": "CRITICAL",
+             "rule": "SSH brute-force followed by successful login",
+             "src": atk, "host": host, "time": t(2, 12, 4),
+             "mitre": "T1110.001 Brute Force / T1078 Valid Accounts",
+             "detail": f"~8 failed SSH logins from {atk} then an ACCEPTED password "
+                       f"for '{usr}'. Classic password-guessing success.",
+             "recommend": f"Confirm, record IOC {atk}, contain the host, reset '{usr}'."},
+            {"id": 2, "severity": "HIGH",
+             "rule": "Suspicious privilege escalation (sudo to root)",
+             "src": "localhost", "host": host, "time": t(2, 13, 30),
+             "mitre": "T1548.003 Sudo and Sudo Caching",
+             "detail": f"'{usr}' (a low-priv service account) spawned /bin/bash as "
+                       f"root within 90s of the SSH login. Likely hands-on-keyboard.",
+             "recommend": "Treat as part of the same incident; review sudoers."},
+            {"id": 3, "severity": "MEDIUM",
+             "rule": "Web application path scanning",
+             "src": atk, "host": host, "time": t(2, 9, 50),
+             "mitre": "T1595.003 Wordlist Scanning",
+             "detail": f"{atk} requested /admin, /.env, /wp-login.php, /.git/config "
+                       f"with an Nmap user-agent. Recon prior to the SSH attack.",
+             "recommend": "Correlate with alert #1 — same source IP."},
+            {"id": 4, "severity": "LOW",
+             "rule": "Outbound connection to uncommon ASN",
+             "src": host, "host": host, "time": t(4, 2, 0),
+             "mitre": "T1071 Application Layer Protocol",
+             "detail": "Single short-lived HTTPS connection to a CDN edge node. "
+                       "Matches a known software-update endpoint.",
+             "recommend": "Likely benign — acknowledge after a quick check."},
+            {"id": 5, "severity": "INFO",
+             "rule": "Scheduled job executed",
+             "src": host, "host": host, "time": t(3, 0, 0),
+             "mitre": "N/A",
+             "detail": "Nightly backup.sh ran from root cron, as configured.",
+             "recommend": "Benign — acknowledge to clear the queue."},
+        ]
+
+    def alert_by_id(self, aid):
+        try:
+            aid = int(aid)
+        except (TypeError, ValueError):
+            return None
+        return next((a for a in self.siem_alerts if a["id"] == aid), None)
+
+    def alert_status(self, aid):
+        """Effective status of an alert, overlaying player progress."""
+        d = self.defense_state
+        if aid in d.get("alerts_escalated", []):    return "ESCALATED"
+        if aid in d.get("alerts_acked", []):        return "CLOSED"
+        if aid in d.get("alerts_investigated", []): return "INVESTIGATING"
+        return "NEW"
 
     def file_size(self, path):
         host_fs = self.fs.get("laptop", {})
