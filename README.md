@@ -5,6 +5,7 @@
 **A terminal-based sysadmin & cybersecurity training game.**
 Type real Linux commands in a simulated REPL, complete missions, and level up — nothing ever touches your actual system.
 
+[![CI](https://github.com/heian-sukuna/Sysops/actions/workflows/ci.yml/badge.svg)](https://github.com/heian-sukuna/Sysops/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
@@ -48,7 +49,7 @@ climb 10 levels, unlock modules, and collect achievements as you go.
 
 ## Features
 
-- 🎮 **28 missions** across 4 difficulty tiers (Easy → Nightmare), plus quick single-command drills
+- 🎮 **36 missions** across 4 difficulty tiers (Easy → Nightmare), plus quick single-command drills
 - ✅ **Real command verification** — a mission step only completes when you actually run the right
   command, so you can't fake your way through
 - ⌨️ **Feels like a real terminal** — arrow-key history, **Tab completion** (commands, mission IDs,
@@ -109,6 +110,8 @@ and `pwd` to move around the simulated filesystem.
 | **Security**          | `nmap`, `tshark`, `gobuster`, `nikto`, `hydra`, `hashcat`, `ufw`, `fail2ban`, `lynis`, `shodan` |
 | **Git**               | full subcommand coverage — `branch`, `merge`, `rebase -i`, `stash`, `bisect`, … |
 | **Red team** *(sim)*  | `theHarvester`, `amass`, `searchsploit`, `msfvenom`, `msfconsole`, `sqlmap`, `linpeas`, … |
+| **Architecture** *(sim)* | `terraform` (`init`/`plan`/`apply`/`output`), `diagram` (web / k8s / vpc)      |
+| **Blue team / SOC**   | `journalctl`, `grep`, `last`, `who`, `siem` (triage), `ioc`, `incident` (IR), `ufw`, `fail2ban`, `lynis` |
 | **System & files**    | `ls`, `cd`, `pwd`, `cat`, `mkdir`, `cp`, `mv`, `df`, `free`, `top`, `ps`, …      |
 
 ## Project structure
@@ -122,11 +125,17 @@ sysops/
 │   ├── save.py            Persistent saves, XP/level logic (~/.sysops/save.json)
 │   ├── ui.py              ANSI engine — colours, boxes, themes, banners
 │   └── menu.py            Main menu, new-game wizard, options
-├── modules/               One file per tool family (transfer, containers, …)
+├── modules/               One file per tool family (transfer, containers,
+│                          networking, cybersec, git, redteam, architecture,
+│                          defense — blue-team/SOC tooling)
 └── scenarios/
-    ├── missions.py        Mission & quick-challenge definitions
-    ├── checks.py          Command-verification predicates for mission steps
-    └── engine.py          Mission runner & progress tracking
+    ├── missions.py             Core missions + quick-challenge drills
+    ├── git_redteam_missions.py Git & red-team pillar missions
+    ├── architecture_missions.py IaC / topology pillar missions
+    ├── blueteam_missions.py    Defensive / hardening pillar missions
+    ├── soc_missions.py         SOC pillar — detection, triage, IOCs, IR
+    ├── checks.py               Command-verification predicates for steps
+    └── engine.py               Mission runner & progress tracking
 tests/                     unittest suite
 ```
 

@@ -26,6 +26,7 @@ class ScenarioEngine:
         completed = set(self.s.get("completed_scenarios", []))
         focus     = self.s.get("focus_module")
         th        = get_theme()
+        unlocked  = self._unlocked_ids()    # compute once, not per row (was O(n²))
 
         if focus and not show_all and not filter_cat:
             display = [sc for sc in scenarios if self._focus_matches(sc, focus)]
@@ -34,22 +35,24 @@ class ScenarioEngine:
             print(f"  {th['accent']}{B}★  FOCUS: {focus.upper()}  —  "
                   f"{f_done}/{len(display)} completed{R}\n")
             for sc in display:
-                self._print_sc(sc, completed, dimmed=False)
+                self._print_sc(sc, completed, unlocked, dimmed=False)
             print(dim(f"  {f_done}/{len(display)} completed in {focus}"))
             print(dim("  Run: mission <id>  to start  |  missions all  to see every mission"))
         else:
             section("Available Missions", BRED)
             for sc in scenarios:
-                self._print_sc(sc, completed, dimmed=False)
+                self._print_sc(sc, completed, unlocked, dimmed=False)
             print(dim(f"  {len(completed)}/{len(SCENARIOS)} completed"))
             print(dim("  Run: mission <id>  to start  (e.g. mission ts01)"))
 
-    def _print_sc(self, sc, completed, dimmed=False):
+    def _print_sc(self, sc, completed, unlocked=None, dimmed=False):
         """Render a single mission row."""
         done    = sc["id"] in completed
         prefix  = ok("✓ ") if done else "  "
         tag_str = " ".join(tag(t) for t in sc["tags"])
-        locked  = sc["id"] not in self._unlocked_ids() and not done
+        if unlocked is None:
+            unlocked = self._unlocked_ids()
+        locked  = sc["id"] not in unlocked and not done
 
         if dimmed:
             id_col    = f"{DIM}[{sc['id']}]{R}"
@@ -91,6 +94,7 @@ class ScenarioEngine:
             "cybersec":   ["cybersec", "cyber"],
             "git":        ["git"],
             "redteam":    ["redteam"],
+            "defense":    ["blue team", "soc", "defensive", "defense"],
             "ssh":        ["ssh"],
         }
         kws = kw_map.get(focus, [focus])
@@ -104,6 +108,7 @@ class ScenarioEngine:
         combo_scs = [sc for sc in SCENARIOS
                      if "combo" in sc["category"].lower()
                      or "COMBO" in sc.get("tags", [])]
+        unlocked  = self._unlocked_ids()    # compute once, not per row
 
         clear()
         section("COMBO MISSIONS — Multi-Tool Workflows")
@@ -123,7 +128,7 @@ class ScenarioEngine:
         available = []
         for sc in combo_scs:
             done   = sc["id"] in completed
-            locked = sc["id"] not in self._unlocked_ids() and not done
+            locked = sc["id"] not in unlocked and not done
             meta   = COMBO_META.get(sc["id"], {})
             tools  = meta.get("tools", [])
             pre    = meta.get("prereqs", [])
@@ -375,6 +380,7 @@ class ScenarioEngine:
             ("cybersec",   "Security — nmap, tshark, gobuster, lynis"),
             ("git",        "Version control — branch, rebase, bisect"),
             ("redteam",    "Red team — recon, exploit, post, report"),
+            ("defense",    "Blue team / SOC — logs, SIEM, IOCs, incident response"),
             ("combo",      "Full-stack — multi-tool challenge missions"),
         ]
 
